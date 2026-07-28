@@ -7,34 +7,33 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      # Official stable SDK container for your MediaTek Filogic architecture
       image: openwrt/sdk:mediatek-filogic
 
     steps:
       - name: Configure and Compile Unbound with Subnet Cache
-        # Force the workflow to run as a non-root user to avoid Exit Code 2
-        user: build
         run: |
-          # Step into the default pre-loaded SDK directory
-          cd /home/build/openwrt
-          
-          # Refresh local dependency package feeds
-          ./scripts/feeds update -a
-          ./scripts/feeds install unbound-daemon libunbound
-          
-          # Configure specific D-Link M30 Filogic target architecture
-          echo "CONFIG_TARGET_mediatek=y" > .config
-          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
-          echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
-          
-          # Inject the missing subnet cache module configuration variables
-          echo "CONFIG_PACKAGE_libunbound=y" >> .config
-          echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
-          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
-          
-          # Restructure dependency tree rules and build the single package
-          make defconfig
-          make package/feeds/packages/unbound/compile V=s -j$(nproc)
+          # Use runuser to execute everything safely as the 'build' user to avoid permission errors
+          runuser -l build -c '
+            cd /home/build/openwrt
+            
+            # Refresh local package feeds
+            ./scripts/feeds update -a
+            ./scripts/feeds install unbound-daemon libunbound
+            
+            # Configure target architecture
+            echo "CONFIG_TARGET_mediatek=y" > .config
+            echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+            echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
+            
+            # Inject custom module configuration flags
+            echo "CONFIG_PACKAGE_libunbound=y" >> .config
+            echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
+            echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
+            
+            # Run configuration check and build the package
+            make defconfig
+            make package/feeds/packages/unbound/compile V=s -j$(nproc)
+          '
 
       - name: Upload Finished APK File
         uses: actions/upload-artifact@v4
