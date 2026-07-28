@@ -25,7 +25,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound
 
-      - name: Configure Target and Subnet Flag
+      - name: Configure Target Architecture and Force Enable Subnet Module
         run: |
           cd openwrt
           echo "CONFIG_TARGET_mediatek=y" > .config
@@ -33,7 +33,10 @@ jobs:
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
-          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
+          
+          # FORCE EXTRA CONFIGURE MODULE RULE: This tells the package builder to compile ECS into the app engine
+          sed -i '/CONFIGURE_ARGS +=/s/$/ --enable-subnet/' feeds/packages/net/unbound/Makefile
+          
           make defconfig
 
       - name: Compile and Package Binaries
@@ -42,12 +45,10 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           make package/feeds/packages/unbound/compile V=s
-          # Generates the required .apk package structures from the compiled files
           make package/index
 
       - name: Upload Finished APK File
         uses: actions/upload-artifact@v4
         with:
           name: custom-unbound-apk
-          # Scans the entire output binary folder for all built .apk components
           path: openwrt/bin/**/*.apk
