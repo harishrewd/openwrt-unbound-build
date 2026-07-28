@@ -25,17 +25,23 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound
 
-      - name: Configure Target Architecture and Force Enable Subnet Module
+      - name: Configure Target and Force Subnet Feature Natively
         run: |
           cd openwrt
+          # Select your exact MediaTek hardware target architecture
           echo "CONFIG_TARGET_mediatek=y" > .config
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
+          
+          # Force compile Unbound components
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           
-          # FORCE EXTRA CONFIGURE MODULE RULE: This tells the package builder to compile ECS into the app engine
-          sed -i '/CONFIGURE_ARGS +=/s/$/ --enable-subnet/' feeds/packages/net/unbound/Makefile
+          # NATIVE COMPILER FLAG: This tells the package builder to link all subnetcache components automatically
+          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
+          
+          # Tell OpenWrt's manifest code to explicitly read the sub-feature flag rules
+          sed -i 's/DEPENDS:=/DEPENDS:=+unbound-subnetcache /g' feeds/packages/net/unbound/Makefile
           
           make defconfig
 
