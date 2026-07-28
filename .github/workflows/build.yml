@@ -7,34 +7,33 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      # Direct official container for your router's architecture (MediaTek Filogic)
+      # Official stable SDK container for your MediaTek Filogic architecture
       image: openwrt/sdk:mediatek-filogic
 
     steps:
-      - name: Update Feeds and Configure Unbound
+      - name: Configure and Compile Unbound with Subnet Cache
+        # Force the workflow to run as a non-root user to avoid Exit Code 2
+        user: build
         run: |
-          # Step into the pre-configured SDK workspace
+          # Step into the default pre-loaded SDK directory
           cd /home/build/openwrt
           
-          # Force refresh package sources
+          # Refresh local dependency package feeds
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound
           
-          # Enable your hardware target rules
+          # Configure specific D-Link M30 Filogic target architecture
           echo "CONFIG_TARGET_mediatek=y" > .config
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Force compile Unbound with the exact subnet cache module flag enabled
+          # Inject the missing subnet cache module configuration variables
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
+          
+          # Restructure dependency tree rules and build the single package
           make defconfig
-
-      - name: Compile Package
-        run: |
-          cd /home/build/openwrt
-          # Compile only the single target package immediately without building tools
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload Finished APK File
