@@ -1,0 +1,48 @@
+name: Build Custom Unbound APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget
+
+      - name: Clone OpenWrt Source
+        run: |
+          git clone https://github.com
+          cd openwrt
+          git checkout openwrt-25.12
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Inject Custom Subnet Cache Flag
+        run: |
+          cd openwrt
+          # Select D-Link M30 Filogic target architecture
+          echo "CONFIG_TARGET_mediatek=y" > .config
+          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+          echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
+          # Force compile Unbound packages with subnet cache module flag enabled
+          echo "CONFIG_PACKAGE_libunbound=y" >> .config
+          echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
+          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
+          make defconfig
+
+      - name: Compile Unbound Package
+        run: |
+          cd openwrt
+          make package/feeds/packages/unbound/compile V=s
+
+      - name: Upload Finished APK File
+        uses: actions/upload-artifact@v4
+        with:
+          name: custom-unbound-apk
+          path: openwrt/bin/packages/aarch64_cortex-a53/packages/unbound-daemon_*.apk
