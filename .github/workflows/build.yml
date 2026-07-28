@@ -11,7 +11,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'openwrt/openwrt'
-          ref: 'openwrt-24.10'
+          # Fixed to use master branch to match your 25.12 firmware perfectly
+          ref: 'master'
           path: 'openwrt'
 
       - name: Install System Dependencies
@@ -47,4 +48,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: custom-unbound-apk
-          path: openwrt/bin/packages/aarch64_cortex-a53/packages/unbound-daemon_*.apk
+          # Smart path search: finds your file regardless of the internal folder structure
+          path: openwrt/bin/packages/**/packages/unbound-daemon_*.apk
