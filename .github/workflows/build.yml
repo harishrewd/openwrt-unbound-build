@@ -22,9 +22,14 @@ jobs:
       - name: Set Up Package Feeds
         run: |
           cd openwrt
-          # Pull down official production packages matching the stable 25.12 branch
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound
+
+      - name: Hardcode Subnetcache Support into the Package Makefile
+        run: |
+          cd openwrt
+          # HARDCODE FIX: Dynamically alters the hardcoded configure options to explicitly enable subnet compilation
+          sed -i 's/--disable-subnet/--enable-subnet/g' feeds/packages/net/unbound/Makefile
 
       - name: Configure Target Architecture and Core Variables
         run: |
@@ -34,32 +39,22 @@ jobs:
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Force compile BOTH the library and daemon components to generate separate files
+          # Force build both layers
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           
-          # CORRECT COMPILER SWITCH: Enables the native subnetcache compilation logic safely
-          echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
-          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
-          
-          # Let the buildroot expand and validate dependencies
           make defconfig
 
-      - name: Full Toolchain and Package Compilation (Takes 50 Minutes)
+      - name: Toolchain and Package Compilation (Takes 45 Minutes)
         run: |
           cd openwrt
-          # We export this variable to prevent configuration check blocks from stopping root compilation
           export FORCE_UNSAFE_CONFIGURE=1
-          
-          # Build underlying core tools and hardware-cross compiler architectures cleanly
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
-          
-          # Isolate and cleanly compile your custom unbound package binary
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload Finished APK File
         uses: actions/upload-artifact@v4
         with:
           name: custom-unbound-25.12.5-apk
-          path: openwrt/bin/**/*.apk  # Bulletproof global wildcard path search
+          path: openwrt/bin/**/*.apk
