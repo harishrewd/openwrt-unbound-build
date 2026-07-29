@@ -14,38 +14,42 @@ jobs:
 
       - name: Download and Unpack OpenWrt 25.12.5 SDK
         run: |
-          # Download the stable release SDK directly matching your 25.12.5 firmware
+          # Fetch the official stable release build SDK matching your router
           wget https://openwrt.org
           
           # Decompress cleanly using zstd handlers
           tar --use-compress-program=zstd -xf openwrt-sdk-25.12.5-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst
-          
-          # Rename the exact output folder explicitly to prevent wildcard missing path errors
           mv openwrt-sdk-25.12.5-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64 openwrt_sdk
 
       - name: Configure Package Feeds for 25.12.5
         run: |
           cd openwrt_sdk
-          # Lock package tracking pointers onto the official stable branch rules
+          # Force the feeds to pull from the stable 25.12 packages branch
           sed -i 's|src-git packages .*|src-git packages https://github.com|' feeds.conf.default
           
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound
 
-      - name: Apply Subnetcache Compilation Flag
+      - name: Apply Subnetcache Compilation Flag Safely
         run: |
           cd openwrt_sdk
-          # Generate base configurations and append the target custom switches cleanly
+          
+          # CRITICAL FIX: Run defconfig FIRST to generate the default base system structure
           make defconfig
+          
+          # Append your custom switches smoothly using >> instead of erasing the file with >
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
+          
+          # Re-run defconfig to validate the changes
           make defconfig
 
       - name: Fast 3-Minute Compilation
         run: |
           cd openwrt_sdk
-          # Build only the requested isolated package tree natively 
+          # FORCE_UNSAFE_CONFIGURE=1 stops the runner from failing when building as root
+          export FORCE_UNSAFE_CONFIGURE=1
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload Finished APK File
