@@ -7,56 +7,23 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Install System Dependencies and Unpackers
-        run: |
-          sudo apt update
-          # Standard toolchain tools plus zstd compression helpers for the SDK archive
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget zstd libz3-dev
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Download and Unpack OpenWrt Snapshot SDK
-        run: |
-          # Fetch the official snapshot SDK archive specifically matching your MediaTek hardware architecture
-          wget https://openwrt.org
-          
-          # Unpack the file safely using explicit zstd decompression parameters
-          tar --use-compress-program=zstd -xf openwrt-sdk-*.tar.zst
-          mv openwrt-sdk-*-mediatek-filogic_* openwrt_sdk
+      - name: Compile Unbound Package Natively via SDK
+        uses: openwrt/gh-action-sdk@v7
+        env:
+          ARCH: 'mediatek-filogic' # Targets your D-Link Aquila M30 processor core environment
+          FEEDNAME: 'packages'
+          PACKAGES: 'unbound-daemon libunbound unbound-control'
+          INDEX: 1
+          V: 's'
+          # Force toggle the internal compilation config rules right inside the package make parameters
+          EXTRA_CFLAGS: '-DUNBOUND_SUBNETCACHE=1' 
+          EXTRA_CONFIGURE: '--enable-subnet'
 
-      - name: Configure Package Feeds
-        run: |
-          cd openwrt_sdk
-          ./scripts/feeds update -a
-          ./scripts/feeds install unbound-daemon libunbound unbound-control
-
-      - name: Hardcode Subnetcache Support into the Package Makefile
-        run: |
-          cd openwrt_sdk
-          # HARDCODE MODULE INJECTION: Changes the default --disable-subnet rule into --enable-subnet inside the package blueprint
-          sed -i 's/--disable-subnet/--enable-subnet/g' feeds/packages/net/unbound/Makefile
-
-      - name: Configure Target Architecture Options
-        run: |
-          cd openwrt_sdk
-          make defconfig
-          
-          # Force toggle the internal package selector macros to link the subnet dependencies natively
-          echo "CONFIG_PACKAGE_libunbound=y" >> .config
-          echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
-          echo "CONFIG_PACKAGE_unbound-control=y" >> .config
-          echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
-          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
-          
-          make defconfig
-
-      - name: Fast 3-Minute SDK Package Compilation
-        run: |
-          cd openwrt_sdk
-          export FORCE_UNSAFE_CONFIGURE=1
-          # Compiles only your isolated custom unbound binary block immediately
-          make package/feeds/packages/unbound/compile V=s -j$(nproc)
-
-      - name: Upload Finished APK Files
+      - name: Compress and Upload Custom APKs
         uses: actions/upload-artifact@v4
         with:
           name: custom-unbound-25.12.5-apk
-          path: openwrt_sdk/bin/**/*.apk  # Captures every single generated package file
+          path: bin/packages/*/packages/unbound*.apk
