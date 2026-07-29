@@ -7,54 +7,43 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout OpenWrt Core Code
-        uses: actions/checkout@v4
-        with:
-          repository: 'openwrt/openwrt'
-          ref: 'master'
-          path: 'openwrt'
-
       - name: Install System Dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-      - name: Set Up Package Feeds
+      - name: Download and Unpack OpenWrt 25.12.5 SDK
         run: |
-          cd openwrt
+          # Pull down the pre-compiled tools specifically matching your router firmware architecture
+          wget https://openwrt.org
+          tar -xf openwrt-sdk-*.tar.xz
+          mv openwrt-sdk-*-mediatek-filogic_* openwrt_sdk
+
+      - name: Configure Package Feeds
+        run: |
+          cd openwrt_sdk
+          # Lock feeds directly to the stable 25.12 branch to avoid branch pollution
+          sed -i 's|src-git packages .*|src-git packages https://github.com|' feeds.conf.default
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound
 
-      - name: Configure Target and Force Subnet Feature Natively
+      - name: Apply Subnetcache Compilation Flag
         run: |
-          cd openwrt
-          # Select your exact MediaTek hardware target architecture
-          echo "CONFIG_TARGET_mediatek=y" > .config
-          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
-          echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
-          
-          # Force compile Unbound components
-          echo "CONFIG_PACKAGE_libunbound=y" >> .config
+          cd openwrt_sdk
+          # Native target flags that cleanly append the required subnetcache module logic 
+          echo "CONFIG_PACKAGE_libunbound=y" > .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
-          
-          # NATIVE COMPILER FLAG: This tells the package builder to link all subnetcache components automatically
-          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
-          
-          # Tell OpenWrt's manifest code to explicitly read the sub-feature flag rules
-          sed -i 's/DEPENDS:=/DEPENDS:=+unbound-subnetcache /g' feeds/packages/net/unbound/Makefile
-          
+          echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
           make defconfig
 
-      - name: Compile and Package Binaries
+      - name: 3-Minute Fast Compilation
         run: |
-          cd openwrt
-          make tools/install -j$(nproc)
-          make toolchain/install -j$(nproc)
-          make package/feeds/packages/unbound/compile V=s
-          make package/index
+          cd openwrt_sdk
+          # Tells the SDK to skip cross-compiling host tools and instantly output the package binaries
+          make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload Finished APK File
         uses: actions/upload-artifact@v4
         with:
-          name: custom-unbound-apk
-          path: openwrt/bin/**/*.apk
+          name: custom-unbound-25.12.5-apk
+          path: openwrt_sdk/bin/packages/*/packages/unbound-daemon*.apk
