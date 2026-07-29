@@ -7,54 +7,59 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Install System Dependencies and Unpackers
+      - name: Checkout OpenWrt Core Code
+        uses: actions/checkout@v4
+        with:
+          repository: 'openwrt/openwrt'
+          ref: 'openwrt-25.12'   # Pulls the stable 25.12 release source tree
+          path: 'openwrt'
+
+      - name: Install System Dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget zstd libz3-dev
 
-      - name: Download and Unpack OpenWrt 25.12.5 SDK
+      - name: Set Up Package Feeds
         run: |
-          # Fetch the official SDK file for MediaTek Filogic matching your release
-          wget https://openwrt.org
-          
-          # Unpack the file safely
-          tar --use-compress-program=zstd -xf openwrt-sdk-25.12.5-*.tar.zst
-          
-          # BULLETPROOF FIX: Dynamic wildcard matching so it never throws an error finding the folder path
-          mv openwrt-sdk-25.12.5-* openwrt_sdk
-
-      - name: Configure Package Feeds for 25.12
-        run: |
-          cd openwrt_sdk
-          # Force feed configs to lock onto the correct stable package structures
-          sed -i 's|src-git packages .*|src-git packages https://github.com|' feeds.conf.default
-          
+          cd openwrt
+          # Pull down official production packages matching the stable 25.12 branch
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound
 
-      - name: Apply Subnetcache Compilation Flag
+      - name: Configure Target Architecture and Core Variables
         run: |
-          cd openwrt_sdk
-          # Initialize baseline config
-          make defconfig
+          cd openwrt
+          # Select exact MediaTek Filogic hardware target architecture for D-Link Aquila M30
+          echo "CONFIG_TARGET_mediatek=y" > .config
+          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+          echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Inject internal code switches and user switches together to bypass default filters
+          # Force compile BOTH the library and daemon components to generate separate files
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
+          
+          # CORRECT COMPILER SWITCH: Enables the native subnetcache compilation logic safely
           echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
           echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
           
+          # Let the buildroot expand and validate dependencies
           make defconfig
 
-      - name: Fast 3-Minute Compilation
+      - name: Full Toolchain and Package Compilation (Takes 50 Minutes)
         run: |
-          cd openwrt_sdk
+          cd openwrt
+          # We export this variable to prevent configuration check blocks from stopping root compilation
           export FORCE_UNSAFE_CONFIGURE=1
-          # Build only the requested isolated package tree natively 
+          
+          # Build underlying core tools and hardware-cross compiler architectures cleanly
+          make tools/install -j$(nproc)
+          make toolchain/install -j$(nproc)
+          
+          # Isolate and cleanly compile your custom unbound package binary
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload Finished APK File
         uses: actions/upload-artifact@v4
         with:
           name: custom-unbound-25.12.5-apk
-          path: openwrt_sdk/bin/**/*.apk
+          path: openwrt/bin/**/*.apk  # Bulletproof global wildcard path search
