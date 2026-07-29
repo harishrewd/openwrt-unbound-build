@@ -28,10 +28,10 @@ jobs:
       - name: Hardcode Subnetcache Support into the Package Makefile
         run: |
           cd openwrt
-          # HARDCODE FIX: Dynamically alters the hardcoded configure options to explicitly enable subnet compilation
+          # THE REAL HARDCODE FIX: Overrides the default --disable-subnet instruction inside the OpenWrt source blueprint
           sed -i 's/--disable-subnet/--enable-subnet/g' feeds/packages/net/unbound/Makefile
 
-      - name: Configure Target Architecture and Core Variables
+      - name: Configure Target Architecture and Complete Package Set
         run: |
           cd openwrt
           # Select exact MediaTek Filogic hardware target architecture for D-Link Aquila M30
@@ -39,9 +39,10 @@ jobs:
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Force build both layers
+          # Force compile ALL core modules and extra helper tools completely
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
+          echo "CONFIG_PACKAGE_unbound-control=y" >> .config
           
           make defconfig
 
@@ -53,8 +54,8 @@ jobs:
           make toolchain/install -j$(nproc)
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
-      - name: Upload Finished APK File
+      - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
         with:
           name: custom-unbound-25.12.5-apk
-          path: openwrt/bin/**/*.apk
+          path: openwrt/bin/**/*.apk  # Captures every single generated package file
