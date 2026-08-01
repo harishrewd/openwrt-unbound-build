@@ -56,5 +56,5 @@ jobs:
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
         with:
-          name: custom-unbound-25.12.5-apk
+          name: custom-unbound-1.25.2-r1-apk   # Updated label name for clarity
           path: openwrt/bin/**/*.apk
