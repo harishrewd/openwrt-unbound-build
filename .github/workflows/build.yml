@@ -1,3 +1,4 @@
+# Version 1.25.2 r2 (Fixed Subnet Cache Module Compilation Mapping)
 name: Build Custom Unbound APK
 
 on:
@@ -38,10 +39,9 @@ jobs:
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
           
-          # THE SELECTION SYMBOLS: This forces the Makefile to link the subnet cache variables natively
-          echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
-          echo "CONFIG_PACKAGE_libunbound_subnet=y" >> .config
-          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
+          # THE CORRECT ENVIRONMENT FIX: Passes the arguments cleanly to the native Makefile macro
+          # This compiles the subnetcache module directly into the core execution pathway
+          echo 'CONFIG_UNBOUND_EXTRA_modules="subnetcache"' >> .config
           
           make defconfig
 
@@ -56,5 +56,5 @@ jobs:
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
         with:
-          name: custom-unbound-1.25.2-r1-apk   # Updated label name for clarity
+          name: custom-unbound-1.25.2-r2-apk   # Updated label name for tracking changes
           path: openwrt/bin/**/*.apk
