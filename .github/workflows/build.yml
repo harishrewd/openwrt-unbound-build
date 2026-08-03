@@ -1,4 +1,4 @@
-# Version 1.25.2 r2 (Fixed Subnet Cache Module Compilation Mapping)
+# Version 1.25.2-Production (Fixed Dependency Ordering & Subnet Cache)
 name: Build Custom Unbound APK
 
 on:
@@ -34,27 +34,36 @@ jobs:
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Force build core components
+          # Force build all required matching dependencies
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
           
-          # THE CORRECT ENVIRONMENT FIX: Passes the arguments cleanly to the native Makefile macro
-          # This compiles the subnetcache module directly into the core execution pathway
-          echo 'CONFIG_UNBOUND_EXTRA_modules="subnetcache"' >> .config
+          # YOUR SELECTION SYMBOLS: Required to trigger extraction mechanisms
+          echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_subnet=y" >> .config
+          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
           
           make defconfig
 
-      - name: Toolchain and Package Compilation (Takes 45 Minutes)
+      - name: Toolchain and Ordered Package Compilation (Takes 45 Minutes)
         run: |
           cd openwrt
           export FORCE_UNSAFE_CONFIGURE=1
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
+          
+          # SEQUENCE FIX: Clean the build space first to reject stale headers
+          make package/feeds/packages/unbound/clean
+          
+          # Pass 1: Single-thread builds the core structures safely to avoid header gaps
+          make package/feeds/packages/unbound/compile V=s -j1
+          
+          # Pass 2: Completes the full multi-core build matrix for the control packages
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
         with:
-          name: custom-unbound-1.25.2-r2-apk   # Updated label name for tracking changes
+          name: fixed-unbound-1.25.2-apk
           path: openwrt/bin/**/*.apk
