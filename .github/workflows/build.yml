@@ -1,4 +1,4 @@
-# Version 1.25.2-Enterprise-v3 (Fixed DNSCrypt Libsodium Dependency Matrix)
+# Version 1.25.2-Production-v3 (Clean Compilation - No External Dependencies)
 name: Build Custom Unbound APK
 
 on:
@@ -24,19 +24,18 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update -a
-          # FIXED: Download and mount libsodium inside the global package feed space
-          ./scripts/feeds install libsodium unbound-daemon libunbound unbound-control
+          ./scripts/feeds install unbound-daemon libunbound unbound-control
 
-      - name: Inject Enterprise Features & Enforce Stability Patches
+      - name: Inject Performance Features & Enforce Stability Patches
         run: |
           # UNIVERSAL PATHWAY: Targeting your preferred default feed directory structure
           MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
           
           if [ -f "$MAKEFILE_PATH" ]; then
-            echo "⚙️ Injecting Subnet-Cache, DNSCrypt, CacheDB, and resolving path structures..."
+            echo "⚙️ Injecting Subnet-Cache, CacheDB, and resolving path structures..."
             
-            # 1. Safely inject your extra enterprise feature options into the core compilation line
-            sed -i 's|CONFIGURE_ARGS +=|CONFIGURE_ARGS += --enable-subnet --enable-cachedb --enable-dnscrypt --with-pthreads |g' "$MAKEFILE_PATH"
+            # 1. Inject features that DO NOT require external compilation libraries (DNSCrypt REMOVED)
+            sed -i 's|CONFIGURE_ARGS +=|CONFIGURE_ARGS += --enable-subnet --enable-cachedb --with-pthreads |g' "$MAKEFILE_PATH"
             
             # 2. THE CHOSEN SEGFAULT REMOVAL: Cleanly strip --enable-allsymbols to prevent musl-libc core dumps
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
@@ -62,8 +61,7 @@ jobs:
           # HARDWARE SPEED VECTOR OPTIMIZATIONS (ARMv8-A v3 Cortex-A53 Core Tuning)
           echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
           
-          # FIXED: Instruct the target config interpreter to forcefully build the compiled libsodium package binaries
-          echo "CONFIG_PACKAGE_libsodium=y" >> .config
+          # Force build core required dependencies natively into the firmware environment
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
