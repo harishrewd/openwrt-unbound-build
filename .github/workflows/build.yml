@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-v3 (Clean Compilation - No External Dependencies)
+# Version 1.25.2-Production-v3 (Clean Pathing - Error-Free Compilation)
 name: Build Custom Unbound APK
 
 on:
@@ -34,15 +34,13 @@ jobs:
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Injecting Subnet-Cache, CacheDB, and resolving path structures..."
             
-            # 1. Inject features that DO NOT require external compilation libraries (DNSCrypt REMOVED)
+            # 1. Inject features that DO NOT require external compilation libraries
             sed -i 's|CONFIGURE_ARGS +=|CONFIGURE_ARGS += --enable-subnet --enable-cachedb --with-pthreads |g' "$MAKEFILE_PATH"
             
             # 2. THE CHOSEN SEGFAULT REMOVAL: Cleanly strip --enable-allsymbols to prevent musl-libc core dumps
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
-            # 3. DIRECTORY REALIGNMENT: Safe pipe boundaries used to prevent bash parsing terminations
-            sed -i 's|--with-conf-file=/var/lib/unbound/unbound.conf|--with-conf-file=/etc/unbound/unbound.conf|g' "$MAKEFILE_PATH"
-            sed -i 's|--with-run-dir=/var/lib/unbound|--with-run-dir=/etc/unbound|g' "$MAKEFILE_PATH"
+            # FIXED: Removed the broken --with-conf-file and --with-run-dir paths to let OpenWrt macros work safely
 
             # Print results to terminal logs to verify execution succeeded before triggering make
             grep "CONFIGURE_ARGS" "$MAKEFILE_PATH"
