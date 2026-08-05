@@ -1,4 +1,4 @@
-# Version 1.25.2-Enterprise (Universal Target Pathing & Verification Stabilizations)
+# Version 1.25.2-Enterprise-v3 (Fixed DNSCrypt Libsodium Dependency Matrix)
 name: Build Custom Unbound APK
 
 on:
@@ -24,7 +24,8 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update -a
-          ./scripts/feeds install unbound-daemon libunbound unbound-control
+          # FIXED: Download and mount libsodium inside the global package feed space
+          ./scripts/feeds install libsodium unbound-daemon libunbound unbound-control
 
       - name: Inject Enterprise Features & Enforce Stability Patches
         run: |
@@ -50,7 +51,7 @@ jobs:
             echo "❌ Error: Universal package Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
 
-      - name: Configure Target Architecture and Core Variables
+      - name: Configure Target Architecture, v3 Flags and Core Variables
         run: |
           cd openwrt
           # Select exact MediaTek Filogic hardware target architecture for D-Link Aquila M30
@@ -58,7 +59,11 @@ jobs:
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Force build all required matching dependencies natively into the firmware environment
+          # HARDWARE SPEED VECTOR OPTIMIZATIONS (ARMv8-A v3 Cortex-A53 Core Tuning)
+          echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
+          
+          # FIXED: Instruct the target config interpreter to forcefully build the compiled libsodium package binaries
+          echo "CONFIG_PACKAGE_libsodium=y" >> .config
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
