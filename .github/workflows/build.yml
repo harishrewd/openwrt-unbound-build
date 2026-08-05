@@ -1,4 +1,4 @@
-# Version 1.25.2-Production (Fixed Dependency Ordering & Subnet Cache)
+# Version 1.25.2-Enterprise (Universal Target Pathing & Verification Stabilizations)
 name: Build Custom Unbound APK
 
 on:
@@ -26,6 +26,30 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install unbound-daemon libunbound unbound-control
 
+      - name: Inject Enterprise Features & Enforce Stability Patches
+        run: |
+          # UNIVERSAL PATHWAY: Targeting your preferred default feed directory structure
+          MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
+          
+          if [ -f "$MAKEFILE_PATH" ]; then
+            echo "⚙️ Injecting Subnet-Cache, DNSCrypt, CacheDB, and resolving path structures..."
+            
+            # 1. Safely inject your extra enterprise feature options into the core compilation line
+            sed -i 's|CONFIGURE_ARGS +=|CONFIGURE_ARGS += --enable-subnet --enable-cachedb --enable-dnscrypt --with-pthreads |g' "$MAKEFILE_PATH"
+            
+            # 2. THE CHOSEN SEGFAULT REMOVAL: Cleanly strip --enable-allsymbols to prevent musl-libc core dumps
+            sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
+            
+            # 3. DIRECTORY REALIGNMENT: Safe pipe boundaries used to prevent bash parsing terminations
+            sed -i 's|--with-conf-file=/var/lib/unbound/unbound.conf|--with-conf-file=/etc/unbound/unbound.conf|g' "$MAKEFILE_PATH"
+            sed -i 's|--with-run-dir=/var/lib/unbound|--with-run-dir=/etc/unbound|g' "$MAKEFILE_PATH"
+
+            # Print results to terminal logs to verify execution succeeded before triggering make
+            grep "CONFIGURE_ARGS" "$MAKEFILE_PATH"
+          else
+            echo "❌ Error: Universal package Makefile not found at $MAKEFILE_PATH!" && exit 1
+          fi
+
       - name: Configure Target Architecture and Core Variables
         run: |
           cd openwrt
@@ -34,15 +58,10 @@ jobs:
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Force build all required matching dependencies
+          # Force build all required matching dependencies natively into the firmware environment
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
-          
-          # YOUR SELECTION SYMBOLS: Required to trigger extraction mechanisms
-          echo "CONFIG_PACKAGE_unbound-subnetcache=y" >> .config
-          echo "CONFIG_PACKAGE_libunbound_subnet=y" >> .config
-          echo "CONFIG_UNBOUND_SUBNETCACHE=y" >> .config
           
           make defconfig
 
@@ -50,16 +69,18 @@ jobs:
         run: |
           cd openwrt
           export FORCE_UNSAFE_CONFIGURE=1
+          
+          echo "🛠️ Compiling tools and hardware-specific toolchain..."
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # SEQUENCE FIX: Clean the build space first to reject stale headers
+          echo "🧹 Performing clean build sweep to purge conflicting header fragments..."
           make package/feeds/packages/unbound/clean
           
-          # Pass 1: Single-thread builds the core structures safely to avoid header gaps
+          echo "🏗️ Phase 1: Executing single-thread compilation to protect dependency mapping..."
           make package/feeds/packages/unbound/compile V=s -j1
           
-          # Pass 2: Completes the full multi-core build matrix for the control packages
+          echo "🚀 Phase 2: Parallel compilation to package final control binaries..."
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload All Finished APK Files
