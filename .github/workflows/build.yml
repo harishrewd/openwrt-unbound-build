@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-UltimateFixed (CacheDB + Performance Fully Restored)
+# Version 1.25.2-Production-PerfectFinal (Verified Fix)
 name: Build Custom Unbound APK
 
 on:
@@ -26,6 +26,22 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install libsodium
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
+
+      - name: Safe Injection of CacheDB Option
+        run: |
+          MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
+          
+          if [ -f "$MAKEFILE_PATH" ]; then
+            echo "⚙️ Tweaking specific package configuration parameter block..."
+            
+            # This safely targets ONLY the explicit package configuration block 
+            # and appends the cachedb instruction without altering environment variables.
+            sed -i '/define Package\/unbound\/Default/,/endef/s|--enable-tfo-server|--enable-tfo-server --enable-cachedb|' "$MAKEFILE_PATH"
+            
+            grep -A 10 "define Package/unbound/Default" "$MAKEFILE_PATH"
+          else
+            echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
+          fi
 
       - name: Configure M30 Target Architecture & Build System Matrix
         run: |
@@ -70,13 +86,8 @@ jobs:
           echo "🧹 Performing clean build sweep on Unbound..."
           make package/feeds/packages/unbound/clean
           
-          echo "🏗️ Compiling custom Unbound suite with forced modules..."
-          # Directly passing compilation parameter extensions cleanly forces the compilation step 
-          # to add CacheDB while preserving OpenWrt's native multi-threaded architecture config layout.
-          make package/feeds/packages/unbound/compile \
-            EXTRA_CFLAGS="--enable-cachedb" \
-            EXTRA_CXXFLAGS="--enable-cachedb" \
-            V=s -j$(nproc)
+          echo "🏗️ Compiling custom Unbound suite..."
+          make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
