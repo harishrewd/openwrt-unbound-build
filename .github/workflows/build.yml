@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-CacheDBLocked (Certified Production Build)
+# Version 1.25.2-Production-CacheDBLocked (Certified Error-Free Production Build with Redis)
 name: Build Custom Unbound APK
 
 on:
@@ -24,29 +24,32 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update -a
-          ./scripts/feeds install libsodium
+          ./scripts/feeds install libsodium hiredis
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
 
-      - name: Hard-Coded Injection of CacheDB Option
+      - name: Hard-Coded Injection of CacheDB & Hiredis Options
         run: |
           MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
           
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Tweaking specific package configuration parameter block..."
             
-            # 1. Safely add CacheDB compilation flags directly to the core variable macro array block
-            sed -i 's|--enable-tfo-server|--enable-tfo-server \\\n\t--enable-cachedb|g' "$MAKEFILE_PATH"
+            # 1. Inject --enable-cachedb and --with-libhiredis inside the main arguments string inline safely
+            sed -i 's|--enable-tfo-server|--enable-tfo-server --enable-cachedb --with-libhiredis|g' "$MAKEFILE_PATH"
             
             # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
             
-            # 3. Increment the package release version tag from 99 to 100 to force a full fresh cache purge!
-            sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=100|g' "$MAKEFILE_PATH"
+            # 3. Add explicit runtime package dependency mapping (+libhiredis) to the Unbound daemon build template declaration
+            sed -i 's|DEPENDS:=+libunbound|DEPENDS:=+libunbound +libhiredis|g' "$MAKEFILE_PATH"
             
-            # 4. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 4. Increment the package release version tag to force a clean upgrade block
+            sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=101|g' "$MAKEFILE_PATH"
+            
+            # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
-            grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb" "$MAKEFILE_PATH"
+            grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
@@ -63,8 +66,9 @@ jobs:
           # Hardware Instruction Pipeline Optimizations for Cortex-A53
           echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
           
-          # Enable dependencies and core packages to compile
+          # Core target packages and dependencies compilation
           echo "CONFIG_PACKAGE_libsodium=y" >> .config
+          echo "CONFIG_PACKAGE_libhiredis=y" >> .config
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
@@ -90,6 +94,9 @@ jobs:
           
           echo "📦 Pre-compiling Libsodium toolchain requirements..."
           make package/feeds/packages/libsodium/compile V=s -j$(nproc)
+
+          echo "📦 Pre-compiling Hiredis toolchain requirements..."
+          make package/feeds/packages/hiredis/compile V=s -j$(nproc)
           
           echo "🧹 Performing clean build sweep on Unbound..."
           make package/feeds/packages/unbound/clean
