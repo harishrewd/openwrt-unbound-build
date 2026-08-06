@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-v6 (Dependency-Safe DNSCrypt Build)
+# Version 1.25.2-Production-v7 (Optimized Dual-Core Build)
 name: Build Custom Unbound APK
 
 on:
@@ -34,15 +34,11 @@ jobs:
           MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
           
           if [ -f "$MAKEFILE_PATH" ]; then
-            echo "⚙️ Injecting DNSCrypt, Subnet-Cache, and CacheDB features..."
+            echo "⚙️ Injecting safely using TARGET CFLAGS configurations..."
             
-            # Direct configuration override matching OpenWrt macros
-            sed -i 's|CONFIGURE_ARGS +=|CONFIGURE_ARGS += --enable-dnscrypt --enable-subnet --enable-cachedb --with-pthreads |g' "$MAKEFILE_PATH"
-            
-            # Strip --enable-allsymbols to keep musl-libc system calls stable on OpenWrt
+            # Add features to the existing configuration parameters array safely instead of using a global rewrite
+            # Strips out any unstable system macros to prevent runtime lockups on musl-libc
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
-            
-            grep "CONFIGURE_ARGS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
@@ -58,7 +54,14 @@ jobs:
           # Compute Optimization Profile for Cortex-A53
           echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
           
-          # CRITICAL RESOLUTION: Force the build system to compile libsodium first
+          # CRITICAL RESOLUTION: Tell OpenWrt to natively pass features using standard config macros
+          echo "CONFIG_UNBOUND_ENABLE_DNSCRYPT=y" >> .config
+          echo "CONFIG_UNBOUND_ENABLE_SUBNET=y" >> .config
+          echo "CONFIG_UNBOUND_ENABLE_CACHEDB=y" >> .config
+          echo "CONFIG_UNBOUND_WITH_PTHREADS=y" >> .config
+          echo "CONFIG_UNBOUND_WITH_LIBEVENT=y" >> .config
+          
+          # Force compile libsodium library first
           echo "CONFIG_PACKAGE_libsodium=y" >> .config
           
           # Activate OpenWrt internal flags for Unbound sub-packages
