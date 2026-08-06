@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-v7 (Optimized Dual-Core Build)
+# Version 1.25.2-Production-Clean (Speed-Optimized Target Build)
 name: Build Custom Unbound APK
 
 on:
@@ -24,59 +24,36 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update -a
-          # 1. Pull libsodium from the standard library feeds first
           ./scripts/feeds install libsodium
-          # 2. Pull all Unbound utilities
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
-
-      - name: Inject DNSCrypt & Performance Features
-        run: |
-          MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
-          
-          if [ -f "$MAKEFILE_PATH" ]; then
-            echo "⚙️ Injecting safely using TARGET CFLAGS configurations..."
-            
-            # Add features to the existing configuration parameters array safely instead of using a global rewrite
-            # Strips out any unstable system macros to prevent runtime lockups on musl-libc
-            sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
-          else
-            echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
-          fi
 
       - name: Configure M30 Target Architecture & Build System Matrix
         run: |
           cd openwrt
-          # Select Filogic Target Profile for D-Link M30
+          
+          # Target Profile Specification for D-Link M30
           echo "CONFIG_TARGET_mediatek=y" > .config
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # Compute Optimization Profile for Cortex-A53
+          # Hardware Instruction Pipeline Optimizations for Cortex-A53
           echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
           
-          # CRITICAL RESOLUTION: Tell OpenWrt to natively pass features using standard config macros
-          echo "CONFIG_UNBOUND_ENABLE_DNSCRYPT=y" >> .config
-          echo "CONFIG_UNBOUND_ENABLE_SUBNET=y" >> .config
-          echo "CONFIG_UNBOUND_ENABLE_CACHEDB=y" >> .config
-          echo "CONFIG_UNBOUND_WITH_PTHREADS=y" >> .config
-          echo "CONFIG_UNBOUND_WITH_LIBEVENT=y" >> .config
-          
-          # Force compile libsodium library first
+          # Force dependencies and core packages to compile
           echo "CONFIG_PACKAGE_libsodium=y" >> .config
-          
-          # Activate OpenWrt internal flags for Unbound sub-packages
-          echo "CONFIG_PACKAGE_libunbound_dnscrypt=y" >> .config
-          echo "CONFIG_PACKAGE_libunbound_ipset=y" >> .config
-          echo "CONFIG_PACKAGE_libunbound_libevent=y" >> .config
-          echo "CONFIG_PACKAGE_libunbound_libpthread=y" >> .config
-          
-          # Choose target binaries for production environment
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
           echo "CONFIG_PACKAGE_unbound-checkconf=y" >> .config
           echo "CONFIG_PACKAGE_unbound-anchor=y" >> .config
           echo "CONFIG_PACKAGE_unbound-host=y" >> .config
+          
+          # CRITICAL SWITCHES: Native package macro configuration rules
+          echo "CONFIG_PACKAGE_libunbound_dnscrypt=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_ipset=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_libevent=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_libpthread=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_subnet=y" >> .config
           
           make defconfig
 
@@ -87,7 +64,6 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # Force compile libsodium library into the build staging directory
           echo "📦 Pre-compiling Libsodium toolchain requirements..."
           make package/feeds/packages/libsodium/compile V=s -j$(nproc)
           
