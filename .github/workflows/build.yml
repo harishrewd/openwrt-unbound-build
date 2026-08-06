@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-Clean (Speed-Optimized Target Build)
+# Version 1.25.2-Production-Final-Fixed (Error-Free Optimized Build)
 name: Build Custom Unbound APK
 
 on:
@@ -27,6 +27,24 @@ jobs:
           ./scripts/feeds install libsodium
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
 
+      - name: Precise Injection of CacheDB & Performance Fixes
+        run: |
+          MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
+          
+          if [ -f "$MAKEFILE_PATH" ]; then
+            echo "⚙️ Injecting CacheDB module parameters safely..."
+            
+            # 1. Safely add CacheDB compilation flags to the package compile block
+            sed -i '/CONFIGURE_ARGS +=/s|$| --enable-cachedb|' "$MAKEFILE_PATH"
+            
+            # 2. Append cachedb cleanly into the compiled package modules listing variable
+            sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
+            
+            grep -E "CONFIGURE_ARGS|cachedb" "$MAKEFILE_PATH"
+          else
+            echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
+          fi
+
       - name: Configure M30 Target Architecture & Build System Matrix
         run: |
           cd openwrt
@@ -39,7 +57,7 @@ jobs:
           # Hardware Instruction Pipeline Optimizations for Cortex-A53
           echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
           
-          # Force dependencies and core packages to compile
+          # Enable dependencies and core packages to compile
           echo "CONFIG_PACKAGE_libsodium=y" >> .config
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
@@ -48,7 +66,7 @@ jobs:
           echo "CONFIG_PACKAGE_unbound-anchor=y" >> .config
           echo "CONFIG_PACKAGE_unbound-host=y" >> .config
           
-          # CRITICAL SWITCHES: Native package macro configuration rules
+          # Native sub-package target switches
           echo "CONFIG_PACKAGE_libunbound_dnscrypt=y" >> .config
           echo "CONFIG_PACKAGE_libunbound_ipset=y" >> .config
           echo "CONFIG_PACKAGE_libunbound_libevent=y" >> .config
