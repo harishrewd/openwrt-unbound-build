@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-ForcedCachePurge (Certified Speed Fix)
+# Version 1.25.2-Production-CacheDBLocked (Certified Production Build)
 name: Build Custom Unbound APK
 
 on:
@@ -27,21 +27,26 @@ jobs:
           ./scripts/feeds install libsodium
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
 
-      - name: Force Cache Purge & Apply Performance Parameters
+      - name: Hard-Coded Injection of CacheDB Option
         run: |
           MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
           
           if [ -f "$MAKEFILE_PATH" ]; then
-            echo "⚙️ Forcing build version increment to bypass stale cache..."
+            echo "⚙️ Tweaking specific package configuration parameter block..."
             
-            # 1. Increment the package release version tag from r1 to r99.
-            # This completely invalidates GitHub's old pre-compiled cache storage blocks!
-            sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=99|g' "$MAKEFILE_PATH"
+            # 1. Safely add CacheDB compilation flags directly to the core variable macro array block
+            sed -i 's|--enable-tfo-server|--enable-tfo-server \\\n\t--enable-cachedb|g' "$MAKEFILE_PATH"
             
-            # 2. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 2. Append cachedb cleanly into the compiled package modules listing variable
+            sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
+            
+            # 3. Increment the package release version tag from 99 to 100 to force a full fresh cache purge!
+            sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=100|g' "$MAKEFILE_PATH"
+            
+            # 4. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
-            grep -E "PKG_RELEASE|CONFIGURE_ARGS" "$MAKEFILE_PATH"
+            grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
