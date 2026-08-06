@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-v3 (Clean Pathing - Error-Free Compilation)
+# Version 1.25.2-Production-v6 (Dependency-Safe DNSCrypt Build)
 name: Build Custom Unbound APK
 
 on:
@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'openwrt/openwrt'
-          ref: 'openwrt-25.12'   # Pulls the stable 25.12 release source tree
+          ref: 'openwrt-25.12'
           path: 'openwrt'
 
       - name: Install System Dependencies
@@ -24,68 +24,78 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update -a
-          ./scripts/feeds install unbound-daemon libunbound unbound-control
+          # 1. Pull libsodium from the standard library feeds first
+          ./scripts/feeds install libsodium
+          # 2. Pull all Unbound utilities
+          ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
 
-      - name: Inject Performance Features & Enforce Stability Patches
+      - name: Inject DNSCrypt & Performance Features
         run: |
-          # UNIVERSAL PATHWAY: Targeting your preferred default feed directory structure
           MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
           
           if [ -f "$MAKEFILE_PATH" ]; then
-            echo "⚙️ Injecting Subnet-Cache, CacheDB, and resolving path structures..."
+            echo "⚙️ Injecting DNSCrypt, Subnet-Cache, and CacheDB features..."
             
-            # 1. Inject features that DO NOT require external compilation libraries
-            sed -i 's|CONFIGURE_ARGS +=|CONFIGURE_ARGS += --enable-subnet --enable-cachedb --with-pthreads |g' "$MAKEFILE_PATH"
+            # Direct configuration override matching OpenWrt macros
+            sed -i 's|CONFIGURE_ARGS +=|CONFIGURE_ARGS += --enable-dnscrypt --enable-subnet --enable-cachedb --with-pthreads |g' "$MAKEFILE_PATH"
             
-            # 2. THE CHOSEN SEGFAULT REMOVAL: Cleanly strip --enable-allsymbols to prevent musl-libc core dumps
+            # Strip --enable-allsymbols to keep musl-libc system calls stable on OpenWrt
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
-            # FIXED: Removed the broken --with-conf-file and --with-run-dir paths to let OpenWrt macros work safely
-
-            # Print results to terminal logs to verify execution succeeded before triggering make
             grep "CONFIGURE_ARGS" "$MAKEFILE_PATH"
           else
-            echo "❌ Error: Universal package Makefile not found at $MAKEFILE_PATH!" && exit 1
+            echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
 
-      - name: Configure Target Architecture, v3 Flags and Core Variables
+      - name: Configure M30 Target Architecture & Build System Matrix
         run: |
           cd openwrt
-          # Select exact MediaTek Filogic hardware target architecture for D-Link Aquila M30
+          # Select Filogic Target Profile for D-Link M30
           echo "CONFIG_TARGET_mediatek=y" > .config
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
-          # HARDWARE SPEED VECTOR OPTIMIZATIONS (ARMv8-A v3 Cortex-A53 Core Tuning)
+          # Compute Optimization Profile for Cortex-A53
           echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
           
-          # Force build core required dependencies natively into the firmware environment
+          # CRITICAL RESOLUTION: Force the build system to compile libsodium first
+          echo "CONFIG_PACKAGE_libsodium=y" >> .config
+          
+          # Activate OpenWrt internal flags for Unbound sub-packages
+          echo "CONFIG_PACKAGE_libunbound_dnscrypt=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_ipset=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_libevent=y" >> .config
+          echo "CONFIG_PACKAGE_libunbound_libpthread=y" >> .config
+          
+          # Choose target binaries for production environment
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
           echo "CONFIG_PACKAGE_unbound-control=y" >> .config
+          echo "CONFIG_PACKAGE_unbound-checkconf=y" >> .config
+          echo "CONFIG_PACKAGE_unbound-anchor=y" >> .config
+          echo "CONFIG_PACKAGE_unbound-host=y" >> .config
           
           make defconfig
 
-      - name: Toolchain and Ordered Package Compilation (Takes 45 Minutes)
+      - name: Compile Toolchain and Dependencies
         run: |
           cd openwrt
           export FORCE_UNSAFE_CONFIGURE=1
-          
-          echo "🛠️ Compiling tools and hardware-specific toolchain..."
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          echo "🧹 Performing clean build sweep to purge conflicting header fragments..."
+          # Force compile libsodium library into the build staging directory
+          echo "📦 Pre-compiling Libsodium toolchain requirements..."
+          make package/feeds/packages/libsodium/compile V=s -j$(nproc)
+          
+          echo "🧹 Performing clean build sweep on Unbound..."
           make package/feeds/packages/unbound/clean
           
-          echo "🏗️ Phase 1: Executing single-thread compilation to protect dependency mapping..."
-          make package/feeds/packages/unbound/compile V=s -j1
-          
-          echo "🚀 Phase 2: Parallel compilation to package final control binaries..."
+          echo "🏗️ Compiling custom Unbound suite..."
           make package/feeds/packages/unbound/compile V=s -j$(nproc)
 
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
         with:
-          name: fixed-unbound-1.25.2-apk
+          name: dlink-m30-unbound-dnscrypt-complete-apk
           path: openwrt/bin/**/*.apk
