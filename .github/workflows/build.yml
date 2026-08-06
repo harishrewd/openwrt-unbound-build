@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-PerfectFinal (Verified Fix)
+# Version 1.25.2-Production-Ultimate (CacheDB + DNSCrypt + Epoll Fixed)
 name: Build Custom Unbound APK
 
 on:
@@ -27,18 +27,23 @@ jobs:
           ./scripts/feeds install libsodium
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
 
-      - name: Safe Injection of CacheDB Option
+      - name: Precise Injection of CacheDB & Performance Fixes
         run: |
           MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
           
           if [ -f "$MAKEFILE_PATH" ]; then
-            echo "⚙️ Tweaking specific package configuration parameter block..."
+            echo "⚙️ Injecting CacheDB module parameters safely..."
             
-            # This safely targets ONLY the explicit package configuration block 
-            # and appends the cachedb instruction without altering environment variables.
-            sed -i '/define Package\/unbound\/Default/,/endef/s|--enable-tfo-server|--enable-tfo-server --enable-cachedb|' "$MAKEFILE_PATH"
+            # 1. Target the unique TFO parameter block inside the Makefile configuration to safely append CacheDB
+            sed -i 's|--enable-tfo-server|--enable-tfo-server --enable-cachedb|g' "$MAKEFILE_PATH"
             
-            grep -A 10 "define Package/unbound/Default" "$MAKEFILE_PATH"
+            # 2. Add cachedb into the official modules registration string inside the Makefile
+            sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
+            
+            # 3. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds and throwing segfaults
+            sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
+            
+            grep -E "CONFIGURE_ARGS|cachedb" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
