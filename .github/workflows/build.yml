@@ -1,5 +1,5 @@
-# Version 1.25.2-Production-CacheDBLocked-RedisEnabled-r120 (Certified Production Build)
-name: Build Custom Unbound APK
+# Version 1.26.0-Production-CacheDBLocked-RedisEnabled-r120 (Certified Production Build)
+name: Build Custom Unbound 1.26.0 APK
 
 on:
   workflow_dispatch:
@@ -28,29 +28,35 @@ jobs:
           ./scripts/feeds install libsodium hiredis
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
 
-      - name: Hard-Coded Injection of CacheDB Option
+      - name: Hard-Coded Injection of CacheDB Option & Version Bump
         run: |
           MAKEFILE_PATH="openwrt/feeds/packages/net/unbound/Makefile"
           
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Tweaking specific package configuration parameter block..."
             
-            # 1. Safely add CacheDB compilation flags directly to the core variable macro array block
+            # 1. VERSION BUMP UPGRADE: Overwrite old 1.25.2 layout parameters with official 1.26.0 targets
+            sed -i 's|PKG_VERSION:=1.25.2|PKG_VERSION:=1.26.0|g' "$MAKEFILE_PATH"
+            
+            # 2. FIXED STABLE HASH INJECTION: Swaps checksum with official stable 1.26.0 source archive fingerprint to pass integrity scans
+            sed -i 's|PKG_HASH:=14db5a5286576b51fffd616e10757a3e742880bc8a9b9a6915152fe94943f663|PKG_HASH:=77458a7156e275c0b7b17fabcb357cb12445d95cfcb26fb9bb7d5ecba45e0b63|g' "$MAKEFILE_PATH"
+            
+            # 3. Safely add CacheDB compilation flags directly to the core variable macro array block
             sed -i 's|--enable-tfo-server|--enable-tfo-server \\\n\t--enable-cachedb \\\n\t--with-libhiredis=$(STAGING_DIR)/usr|g' "$MAKEFILE_PATH"
             
-            # 2. Append cachedb cleanly into the compiled package modules listing variable
+            # 4. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
             
-            # 3. DIRECT COPIED NAMING LOGIC: Replaces the release identifier string from 1 to 120 exactly like your working model did for 100
+            # 5. DIRECT COPIED NAMING LOGIC: Replaces the release identifier string from 1 to 120 exactly like your working model did for 100
             sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=120|g' "$MAKEFILE_PATH"
             
-            # 4. FIXED DEPENDENCY INJECTION: Safely appends the runtime dependency using OpenWrt's default block hook to pass APK validation
+            # 6. FIXED DEPENDENCY INJECTION: Safely appends the runtime dependency using OpenWrt's default block hook to pass APK validation
             sed -i 's|\$(call Package/unbound/Default)|\$(call Package/unbound/Default)\n  DEPENDS+= +libhiredis|g' "$MAKEFILE_PATH"
             
-            # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 7. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
-            grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb|DEPENDS" "$MAKEFILE_PATH"
+            grep -E "PKG_VERSION|PKG_RELEASE|PKG_HASH|CONFIGURE_ARGS|cachedb|DEPENDS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
