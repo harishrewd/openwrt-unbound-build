@@ -35,22 +35,11 @@ jobs:
           
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Tweaking specific package configuration parameter block..."
-            
-            # 1. Inject --enable-cachedb and --with-libhiredis inside the main arguments string inline safely
             sed -i 's|--enable-tfo-server|--enable-tfo-server --enable-cachedb --with-libhiredis|g' "$MAKEFILE_PATH"
-            
-            # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
-            
-            # 3. Add explicit runtime package dependency mapping (+libhiredis) to the Unbound daemon build template declaration
             sed -i 's|DEPENDS:=+libunbound|DEPENDS:=+libunbound +libhiredis|g' "$MAKEFILE_PATH"
-            
-            # 4. Increment the package release version tag to force a clean upgrade block
             sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=101|g' "$MAKEFILE_PATH"
-            
-            # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
-            
             grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
@@ -94,18 +83,18 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # FIXED: Swapped out /compile execution paths for full development staging setups
+          # FIXED: Cleaned up long path references to match standard root namespace linking
           echo "📦 Pre-compiling Libsodium toolchain requirements..."
-          make package/feeds/packages/libsodium/compile/install V=s -j$(nproc)
+          make package/libsodium/compile V=s -j$(nproc)
 
           echo "📦 Pre-compiling Hiredis toolchain requirements..."
-          make package/feeds/packages/hiredis/compile/install V=s -j$(nproc)
+          make package/hiredis/compile V=s -j$(nproc)
           
           echo "🧹 Performing clean build sweep on Unbound..."
-          make package/feeds/packages/unbound/clean
+          make package/unbound/clean
           
           echo "🏗️ Compiling custom Unbound suite..."
-          make package/feeds/packages/unbound/compile V=s -j$(nproc)
+          make package/unbound/compile V=s -j$(nproc)
 
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
