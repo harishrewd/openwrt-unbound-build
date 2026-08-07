@@ -18,7 +18,9 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget zstd libz3-dev
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev \
+            file wget zstd libz3-dev
 
       - name: Set Up Package Feeds
         run: |
@@ -92,11 +94,12 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
+          # FIXED: Swapped out /compile execution paths for full development staging setups
           echo "📦 Pre-compiling Libsodium toolchain requirements..."
-          make package/feeds/packages/libsodium/compile V=s -j$(nproc)
+          make package/feeds/packages/libsodium/compile/install V=s -j$(nproc)
 
           echo "📦 Pre-compiling Hiredis toolchain requirements..."
-          make package/feeds/packages/hiredis/compile V=s -j$(nproc)
+          make package/feeds/packages/hiredis/compile/install V=s -j$(nproc)
           
           echo "🧹 Performing clean build sweep on Unbound..."
           make package/feeds/packages/unbound/clean
