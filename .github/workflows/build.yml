@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-CacheDB-Redis (Certified Error-Free Build)
+# Version 1.25.2-Production-CacheDB-Redis-Verified (Certified Error-Free Build)
 name: Build Custom Unbound APK
 
 on:
@@ -36,26 +36,29 @@ jobs:
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Tweaking specific package configuration parameter block..."
             
-            # 1. FIXED: Added $(STAGING_DIR)/usr path so the compiler can find hiredis
+            # 1. Inject CacheDB and explicitly link the staging directory hiredis client path
             sed -i 's|--enable-tfo-server|--enable-tfo-server \\\n\t--enable-cachedb \\\n\t--with-libhiredis=$(STAGING_DIR)/usr|g' "$MAKEFILE_PATH"
             
             # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
             
-            # 3. Add explicit runtime package dependency mapping (+libhiredis) to BOTH daemon and library templates
-            sed -i 's|DEPENDS:=+libunbound|DEPENDS:=+libunbound +libhiredis|g' "$MAKEFILE_PATH"
+            # 3. FIXED: Target the unique Package/libunbound dependency block section directly
+            sed -i '/Package\/libunbound/,/^$/s/DEPENDS:=.*/& +libhiredis/' "$MAKEFILE_PATH"
             
-            # 4. FIXED: Match against PKG_VERSION and inject build dependencies cleanly
+            # 4. FIXED: Target the unique Package/unbound-daemon dependency block section directly
+            sed -i '/Package\/unbound-daemon/,/^$/s/DEPENDS:=.*/& +libhiredis/' "$MAKEFILE_PATH"
+            
+            # 5. Inject explicit build dependency requirement for hiredis under PKG_VERSION
             sed -i '/PKG_VERSION:=/a PKG_BUILD_DEPENDS:=hiredis libsodium' "$MAKEFILE_PATH"
             
-            # 5. Force update the package release value directly targeting the actual AUTORELEASE macro block
-            sed -i 's|PKG_RELEASE:=$(AUTORELEASE)|PKG_RELEASE:=101|g' "$MAKEFILE_PATH"
+            # 6. Force update the package release value directly targeting the actual AUTORELEASE macro block
+            sed -i 's|PKG_RELEASE:=$(AUTORELEASE)|PKG_RELEASE:=105|g' "$MAKEFILE_PATH"
             
-            # 6. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 7. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
             echo "🔍 Verifying Makefile Injection Results:"
-            grep -E "PKG_VERSION|PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH"
+            grep -E "PKG_VERSION|PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH" -A 2
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
@@ -100,7 +103,7 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # 2. FIXED: Correct pathing to feeds subdirectory structure
+          # 2. Correct pathing to feeds subdirectory structure
           echo "📦 Forcing staging generation for libsodium..."
           make package/feeds/packages/libsodium/compile V=s -j$(nproc)
           
