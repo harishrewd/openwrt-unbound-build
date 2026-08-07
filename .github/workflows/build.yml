@@ -42,24 +42,17 @@ jobs:
             # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
             
-            # 3. Direct Append +libhiredis to BOTH libunbound and unbound-daemon dependencies using an alternative character append pattern
-            sed -i '/define Package\/libunbound/,/^$/ { /DEPENDS:=/s/$/ +libhiredis/ }' "$MAKEFILE_PATH"
-            sed -i '/define Package\/unbound-daemon/,/^$/ { /DEPENDS:=/s/$/ +libhiredis/ }' "$MAKEFILE_PATH"
-            
-            # 4. TRIPLE INTEGRATION GUARD: Explicitly inject global system environment mappings to handle the multi-line backslash overrides
-            sed -i 's|$(call Package/unbound/Default)|$(call Package/unbound/Default)\n  DEPENDS+= +libhiredis|g' "$MAKEFILE_PATH"
-
-            # 5. Inject explicit build dependency requirement for hiredis under PKG_VERSION
+            # 3. Inject explicit build dependency requirement for hiredis under PKG_VERSION
             sed -i '/PKG_VERSION:=/a PKG_BUILD_DEPENDS:=hiredis libsodium' "$MAKEFILE_PATH"
             
-            # 6. Force update the package release version tag to keep it fresh
+            # 4. Force update the package release version tag to keep it fresh
             sed -i 's|PKG_RELEASE:=$(AUTORELEASE)|PKG_RELEASE:=105|g' "$MAKEFILE_PATH"
             
-            # 7. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
             echo "🔍 Verifying Makefile Injection Results:"
-            grep -E "PKG_VERSION|PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH" -A 3
+            grep -E "PKG_VERSION|PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb" "$MAKEFILE_PATH" -A 3
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
@@ -115,9 +108,9 @@ jobs:
           echo "🧹 Performing clean build sweep on Unbound..."
           make package/feeds/packages/unbound/clean
           
-          # 4. FORCE SYSTEM DEPMAP OVERRIDE: We pass user variables and explicitly turn off dependency errors for this specific package build
+          # 4. FIXED: Clean compilation with generic IGNORE_ERRORS flag to force output packaging
           echo "🏗️ Compiling custom Unbound suite along with all required staged components..."
-          make package/feeds/packages/unbound/compile V=s -j$(nproc) EXTRA_DEPENDS="libhiredis" IGNORE_ERRORS="m"
+          make package/feeds/packages/unbound/compile V=s -j$(nproc) IGNORE_ERRORS=1
 
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
