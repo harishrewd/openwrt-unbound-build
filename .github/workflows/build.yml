@@ -42,16 +42,20 @@ jobs:
             # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
             
-            # 3. FIXED: Add explicit runtime package dependency mapping (+libhiredis) to BOTH daemon and library templates
+            # 3. Add explicit runtime package dependency mapping (+libhiredis) to BOTH daemon and library templates
             sed -i 's|DEPENDS:=+libunbound|DEPENDS:=+libunbound +libhiredis|g' "$MAKEFILE_PATH"
             
-            # 4. FIXED: Force full structural build-time dependency mapping cleanly onto a new line below PKG_RELEASE
-            sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=101\nPKG_BUILD_DEPENDS:=hiredis libsodium|g' "$MAKEFILE_PATH"
+            # 4. FIXED FIXED: Match against PKG_VERSION which is guaranteed to be there, and inject build dependencies cleanly
+            sed -i '/PKG_VERSION:=/a PKG_BUILD_DEPENDS:=hiredis libsodium' "$MAKEFILE_PATH"
             
-            # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 5. Force update the package release value directly targeting the actual AUTORELEASE macro block
+            sed -i 's|PKG_RELEASE:=$(AUTORELEASE)|PKG_RELEASE:=101|g' "$MAKEFILE_PATH"
+            
+            # 6. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
-            grep -E "PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH"
+            echo "🔍 Verifying Makefile Injection Results:"
+            grep -E "PKG_VERSION|PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
@@ -96,7 +100,17 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # 2. FIXED: Let OpenWrt's automated dependency engine resolve compiling, staging, and exporting everything in sequence
+          # 2. FIXED FIXED: Compile the dependencies directly first so their headers populate staging layout
+          echo "📦 Forcing staging generation for libsodium..."
+          make package/libsodium/compile V=s -j$(nproc)
+          
+          echo "📦 Forcing staging generation for hiredis..."
+          make package/hiredis/compile V=s -j$(nproc)
+          
+          # 3. Run the final package build tracking loops
+          echo "🧹 Performing clean build sweep on Unbound..."
+          make package/unbound/clean
+          
           echo "🏗️ Compiling custom Unbound suite along with all required staged components..."
           make package/unbound/compile V=s -j$(nproc)
 
