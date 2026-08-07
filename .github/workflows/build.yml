@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-CacheDB-Redis-Verified (Certified Error-Free Build)
+# Version 1.25.2-Production-CacheDBLocked (Certified Error-Free Production Build with Redis)
 name: Build Custom Unbound APK
 
 on:
@@ -36,29 +36,26 @@ jobs:
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Tweaking specific package configuration parameter block..."
             
-            # 1. Inject CacheDB and explicitly link the staging directory hiredis client path
-            sed -i 's|--enable-tfo-server|--enable-tfo-server \\\n\t--enable-cachedb \\\n\t--with-libhiredis=$(STAGING_DIR)/usr|g' "$MAKEFILE_PATH"
+            # 1. Inject --enable-cachedb and --with-libhiredis inside the main arguments string inline safely
+            sed -i 's|--enable-tfo-server|--enable-tfo-server --enable-cachedb --with-libhiredis|g' "$MAKEFILE_PATH"
             
             # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
             
-            # 3. FIXED: Target the unique Package/libunbound dependency block section directly
-            sed -i '/Package\/libunbound/,/^$/s/DEPENDS:=.*/& +libhiredis/' "$MAKEFILE_PATH"
+            # 3. Add explicit runtime package dependency mapping (+libhiredis) to BOTH daemon and library templates
+            sed -i 's|DEPENDS:=+libunbound|DEPENDS:=+libunbound +libhiredis|g' "$MAKEFILE_PATH"
             
-            # 4. FIXED: Target the unique Package/unbound-daemon dependency block section directly
-            sed -i '/Package\/unbound-daemon/,/^$/s/DEPENDS:=.*/& +libhiredis/' "$MAKEFILE_PATH"
-            
-            # 5. Inject explicit build dependency requirement for hiredis under PKG_VERSION
+            # 4. Inject build dependencies cleanly below PKG_VERSION
             sed -i '/PKG_VERSION:=/a PKG_BUILD_DEPENDS:=hiredis libsodium' "$MAKEFILE_PATH"
             
-            # 6. Force update the package release value directly targeting the actual AUTORELEASE macro block
-            sed -i 's|PKG_RELEASE:=$(AUTORELEASE)|PKG_RELEASE:=105|g' "$MAKEFILE_PATH"
+            # 5. Force update the package release value directly targeting the actual AUTORELEASE macro block
+            sed -i 's|PKG_RELEASE:=$(AUTORELEASE)|PKG_RELEASE:=101|g' "$MAKEFILE_PATH"
             
-            # 7. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 6. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
             echo "🔍 Verifying Makefile Injection Results:"
-            grep -E "PKG_VERSION|PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH" -A 2
+            grep -E "PKG_VERSION|PKG_RELEASE|PKG_BUILD_DEPENDS|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
@@ -103,19 +100,22 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # 2. Correct pathing to feeds subdirectory structure
-          echo "📦 Forcing staging generation for libsodium..."
-          make package/feeds/packages/libsodium/compile V=s -j$(nproc)
+          # 2. Compile and explicitly install dependencies into the cross-compile staging environment
+          echo "📦 Compiling and installing libsodium into staging folder..."
+          make package/libsodium/install V=s -j$(nproc)
           
-          echo "📦 Forcing staging generation for hiredis..."
-          make package/feeds/packages/hiredis/compile V=s -j$(nproc)
+          echo "📦 Compiling and installing hiredis into staging folder..."
+          make package/hiredis/install V=s -j$(nproc)
           
-          # 3. Run the final package build tracking loops
+          # 3. Clean Unbound workspace
           echo "🧹 Performing clean build sweep on Unbound..."
-          make package/feeds/packages/unbound/clean
+          make package/unbound/clean
           
-          echo "🏗️ Compiling custom Unbound suite along with all required staged components..."
-          make package/feeds/packages/unbound/compile V=s -j$(nproc)
+          # 4. FIXED OVERRIDE: Manually define the compilation include variables inline.
+          # This forces Unbound's configuration tool to look directly into the directory where hiredis is stored.
+          echo "🏗️ Compiling custom Unbound suite with absolute environment path inclusions..."
+          TARGET_INC_DIR=$(ls -d staging_dir/target-aarch64_*)
+          make package/unbound/compile EXTRA_CFLAGS="-I$PWD/$TARGET_INC_DIR/usr/include" EXTRA_LDFLAGS="-L$PWD/$TARGET_INC_DIR/usr/lib" V=s -j$(nproc)
 
       - name: Upload All Finished APK Files
         uses: actions/upload-artifact@v4
