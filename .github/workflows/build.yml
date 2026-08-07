@@ -1,4 +1,4 @@
-# Version 1.25.2-Production-CacheDBLocked-RedisEnabled (Certified Production Build with Redis)
+# Version 1.25.2-Production-CacheDBLocked-RedisEnabled-r120 (Certified Production Build)
 name: Build Custom Unbound APK
 
 on:
@@ -24,7 +24,7 @@ jobs:
         run: |
           cd openwrt
           ./scripts/feeds update -a
-          # MINIMAL TWEAK: Installed hiredis directly into your working feed framework
+          # NATIVE STAGING: Pre-loads hiredis straight into your working feeds layout alongside libsodium
           ./scripts/feeds install libsodium hiredis
           ./scripts/feeds install unbound-daemon libunbound unbound-control unbound-checkconf unbound-anchor unbound-host
 
@@ -35,19 +35,22 @@ jobs:
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Tweaking specific package configuration parameter block..."
             
-            # 1. MINIMAL TWEAK: Safely append both CacheDB and the specific cross-compile Hiredis staging path flag
+            # 1. Safely add CacheDB compilation flags directly to the core variable macro array block
             sed -i 's|--enable-tfo-server|--enable-tfo-server \\\n\t--enable-cachedb \\\n\t--with-libhiredis=$(STAGING_DIR)/usr|g' "$MAKEFILE_PATH"
             
             # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
             
-            # 3. Increment the package release version tag from 100 to 105 to mark the Redis engine upgrade!
-            sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=105|g' "$MAKEFILE_PATH"
+            # 3. DIRECT COPIED NAMING LOGIC: Replaces the release identifier string from 1 to 120 exactly like your working model did for 100
+            sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=120|g' "$MAKEFILE_PATH"
             
-            # 4. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
+            # 4. FIXED DEPENDENCY INJECTION: Safely appends the runtime dependency using OpenWrt's default block hook to pass APK validation
+            sed -i 's|\$(call Package/unbound/Default)|\$(call Package/unbound/Default)\n  DEPENDS+= +libhiredis|g' "$MAKEFILE_PATH"
+            
+            # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
             
-            grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb" "$MAKEFILE_PATH"
+            grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb|DEPENDS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
           fi
@@ -62,11 +65,10 @@ jobs:
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_dlink_aquila-pro-ai-m30-a1=y" >> .config
           
           # Hardware Instruction Pipeline Optimizations for Cortex-A53
-          echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crc+crypto -mtune=cortex-a53\"" >> .config
+          echo "CONFIG_TARGET_OPTIMIZATION=\"-O2 -pipe -march=armv8-a+crypto -mtune=cortex-a53\"" >> .config
           
           # Enable dependencies and core packages to compile
           echo "CONFIG_PACKAGE_libsodium=y" >> .config
-          # MINIMAL TWEAK: Instruct OpenWrt to natively build the libhiredis target asset
           echo "CONFIG_PACKAGE_libhiredis=y" >> .config
           echo "CONFIG_PACKAGE_libunbound=y" >> .config
           echo "CONFIG_PACKAGE_unbound-daemon=y" >> .config
@@ -94,14 +96,14 @@ jobs:
           echo "📦 Pre-compiling Libsodium toolchain requirements..."
           make package/feeds/packages/libsodium/compile V=s -j$(nproc)
           
-          # MINIMAL TWEAK: Pre-compiling Hiredis exactly the same successful way libsodium is handled
+          # NATIVE STAGING: Pre-compiles hiredis using your exact working libsodium path logic
           echo "📦 Pre-compiling Hiredis toolchain requirements..."
           make package/feeds/packages/hiredis/compile V=s -j$(nproc)
           
           echo "🧹 Performing clean build sweep on Unbound..."
           make package/feeds/packages/unbound/clean
           
-          # MINIMAL TWEAK: Compiled with an explicit target block variable check bypass
+          # Compiled with the native check bypass flag exactly like your working reference model
           echo "🏗 Compiling custom Unbound suite..."
           make package/feeds/packages/unbound/compile V=s -j$(nproc) IPKG_INSTANT_CHECK=0
 
