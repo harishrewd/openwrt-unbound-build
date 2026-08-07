@@ -35,11 +35,22 @@ jobs:
           
           if [ -f "$MAKEFILE_PATH" ]; then
             echo "⚙️ Tweaking specific package configuration parameter block..."
+            
+            # 1. Inject --enable-cachedb and --with-libhiredis inside the main arguments string inline safely
             sed -i 's|--enable-tfo-server|--enable-tfo-server --enable-cachedb --with-libhiredis|g' "$MAKEFILE_PATH"
+            
+            # 2. Append cachedb cleanly into the compiled package modules listing variable
             sed -i 's|subnetcache ipset respip validator iterator|cachedb subnetcache ipset respip validator iterator|g' "$MAKEFILE_PATH"
+            
+            # 3. Add explicit runtime package dependency mapping (+libhiredis) to the Unbound daemon build template declaration
             sed -i 's|DEPENDS:=+libunbound|DEPENDS:=+libunbound +libhiredis|g' "$MAKEFILE_PATH"
+            
+            # 4. Increment the package release version tag to force a clean upgrade block
             sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=101|g' "$MAKEFILE_PATH"
+            
+            # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
             sed -i 's|--enable-allsymbols||g' "$MAKEFILE_PATH"
+            
             grep -E "PKG_RELEASE|CONFIGURE_ARGS|cachedb|hiredis|DEPENDS" "$MAKEFILE_PATH"
           else
             echo "❌ Error: Makefile not found at $MAKEFILE_PATH!" && exit 1
@@ -83,12 +94,21 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # FIXED: Cleaned up long path references to match standard root namespace linking
           echo "📦 Pre-compiling Libsodium toolchain requirements..."
           make package/libsodium/compile V=s -j$(nproc)
 
           echo "📦 Pre-compiling Hiredis toolchain requirements..."
           make package/hiredis/compile V=s -j$(nproc)
+          
+          # MANUAL INJECTION STAGE: Manually copy the compiled hiredis artifacts straight into the compiler's staging directories
+          echo "🚚 Manually forcing hiredis assets into target cross-compile headers space..."
+          STAGING_TARGET_DIR=$(ls -d staging_dir/target-aarch64_*)
+          mkdir -p ${STAGING_TARGET_DIR}/usr/include/hiredis
+          cp -f build_dir/target-aarch64_*/hiredis-*/hiredis.h ${STAGING_TARGET_DIR}/usr/include/hiredis/
+          cp -f build_dir/target-aarch64_*/hiredis-*/async.h ${STAGING_TARGET_DIR}/usr/include/hiredis/
+          cp -f build_dir/target-aarch64_*/hiredis-*/read.h ${STAGING_TARGET_DIR}/usr/include/hiredis/
+          cp -f build_dir/target-aarch64_*/hiredis-*/sds.h ${STAGING_TARGET_DIR}/usr/include/hiredis/
+          cp -f build_dir/target-aarch64_*/hiredis-*/*.so* ${STAGING_TARGET_DIR}/usr/lib/
           
           echo "🧹 Performing clean build sweep on Unbound..."
           make package/unbound/clean
