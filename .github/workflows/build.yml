@@ -45,7 +45,7 @@ jobs:
             # 3. FIXED: Add explicit runtime package dependency mapping (+libhiredis) to BOTH daemon and library templates
             sed -i 's|DEPENDS:=+libunbound|DEPENDS:=+libunbound +libhiredis|g' "$MAKEFILE_PATH"
             
-            # 4. FIXED: Force full structural build-time dependency mapping at the root level template
+            # 4. FIXED: Force full structural build-time dependency mapping cleanly onto a new line below PKG_RELEASE
             sed -i 's|PKG_RELEASE:=1|PKG_RELEASE:=101\nPKG_BUILD_DEPENDS:=hiredis libsodium|g' "$MAKEFILE_PATH"
             
             # 5. Cleanly strip allsymbols so it stops breaking your multi-threaded speeds
@@ -96,18 +96,8 @@ jobs:
           make tools/install -j$(nproc)
           make toolchain/install -j$(nproc)
           
-          # 2. Compile dependencies completely into the target image space
-          echo "📦 Pre-compiling and staging Libsodium..."
-          make package/libsodium/compile V=s -j$(nproc)
-          
-          echo "📦 Pre-compiling and staging Hiredis..."
-          make package/hiredis/compile V=s -j$(nproc)
-          
-          # 3. Clean and compile the updated Unbound package
-          echo "🧹 Performing clean build sweep on Unbound..."
-          make package/unbound/clean
-          
-          echo "🏗️ Compiling custom Unbound suite..."
+          # 2. FIXED: Let OpenWrt's automated dependency engine resolve compiling, staging, and exporting everything in sequence
+          echo "🏗️ Compiling custom Unbound suite along with all required staged components..."
           make package/unbound/compile V=s -j$(nproc)
 
       - name: Upload All Finished APK Files
